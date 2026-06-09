@@ -60,22 +60,27 @@ export default function QuizPage() {
       const uaN = norm(ua);
       const caN = norm(ca);
 
-      // 1. Exact match
+      // 1. Exact match (handles: huruf vs huruf, teks vs teks, Benar vs Benar)
       if (uaN === caN) return true;
 
-      // 2. correct_answer adalah huruf (A/B/C/D), user pilih teks opsi
+      // 2. Keduanya huruf tapi beda kapitalisasi (misal "a" vs "A")
+      if (/^[a-d]$/i.test(ua.trim()) && /^[a-d]$/i.test(ca.trim())) {
+        return ua.trim().toUpperCase() === ca.trim().toUpperCase();
+      }
+
+      // 3. correct_answer adalah huruf, user jawab teks opsi (fallback)
       if (/^[a-d]$/i.test(ca.trim()) && options.length) {
         const idx = ca.trim().toUpperCase().charCodeAt(0) - 65;
         if (options[idx] && norm(options[idx]) === uaN) return true;
       }
 
-      // 3. user jawab huruf, correct_answer adalah teks
+      // 4. user jawab huruf, correct_answer adalah teks (fallback)
       if (/^[a-d]$/i.test(ua.trim()) && options.length) {
         const idx = ua.trim().toUpperCase().charCodeAt(0) - 65;
         if (options[idx] && norm(options[idx]) === caN) return true;
       }
 
-      // 4. Benar/Salah
+      // 5. Benar/Salah
       if (type === 'true_false') {
         const trueV  = ['benar', 'true', 'ya', 'betul'];
         const falseV = ['salah', 'false', 'tidak', 'bukan'];
@@ -87,8 +92,8 @@ export default function QuizPage() {
         if (uaF && caF) return true;
       }
 
-      // 5. Partial match (jawaban panjang)
-      if (uaN.length > 3 && caN.length > 3) {
+      // 6. Partial match untuk essay
+      if (type === 'essay' && uaN.length > 3 && caN.length > 3) {
         if (caN.includes(uaN) || uaN.includes(caN)) return true;
       }
 
@@ -269,9 +274,11 @@ export default function QuizPage() {
           ) : (
             <div className="space-y-2">
               {q.options?.map((opt, i) => {
-                const selected = answers[q.id] === opt;
+                // Simpan jawaban sebagai huruf (A/B/C/D) agar konsisten dengan correct_answer
+                const letter = String.fromCharCode(65 + i);
+                const selected = answers[q.id] === letter;
                 return (
-                  <button key={i} onClick={() => setAnswers({ ...answers, [q.id]: opt })}
+                  <button key={i} onClick={() => setAnswers({ ...answers, [q.id]: letter })}
                     className={`w-full text-left px-4 py-3 rounded-xl border text-sm transition-all ${
                       selected
                         ? 'border-pink-500/50 bg-pink-500/15 text-white font-medium'
@@ -321,7 +328,20 @@ export default function QuizPage() {
         </div>
 
         <div className="space-y-2">
-          {result.results?.map((r, i) => (
+          {result.results?.map((r, i) => {
+            // Resolve teks dari huruf untuk tampilan hasil
+            const resolveAnswer = (ans, options = []) => {
+              if (!ans) return '(tidak dijawab)';
+              if (/^[a-d]$/i.test(ans.trim()) && options.length) {
+                const idx = ans.trim().toUpperCase().charCodeAt(0) - 65;
+                return options[idx] || ans;
+              }
+              return ans;
+            };
+            const userAnswerText    = resolveAnswer(r.user_answer, r.options);
+            const correctAnswerText = resolveAnswer(r.correct_answer, r.options);
+
+            return (
             <div key={i} className={`card border ${r.is_correct ? 'border-pink-500/20 bg-pink-500/5' : 'border-rose-500/20 bg-rose-500/5'}`}>
               <div className="flex items-start gap-3">
                 {r.is_correct
@@ -329,13 +349,13 @@ export default function QuizPage() {
                   : <XCircle    size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />}
                 <div className="flex-1">
                   <p className="font-medium text-white text-sm">{r.question}</p>
-                  <p className="text-xs text-pink-300/40 mt-1">Jawabanmu: <span className="text-pink-200/60">{r.user_answer || '(tidak dijawab)'}</span></p>
-                  {!r.is_correct && <p className="text-xs text-pink-400 mt-0.5">Jawaban benar: <span className="font-medium">{r.correct_answer}</span></p>}
+                  <p className="text-xs text-pink-300/40 mt-1">Jawabanmu: <span className="text-pink-200/60">{userAnswerText}</span></p>
+                  {!r.is_correct && <p className="text-xs text-pink-400 mt-0.5">Jawaban benar: <span className="font-medium">{correctAnswerText}</span></p>}
                   {r.explanation && <p className="text-xs text-pink-300/30 mt-1 italic">{r.explanation}</p>}
                 </div>
               </div>
             </div>
-          ))}
+          )})}
         </div>
 
         <button onClick={reset} className="btn-primary w-full flex items-center justify-center gap-2">
